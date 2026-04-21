@@ -126,6 +126,30 @@ async def tracker_list(interaction: discord.Interaction):
         ephemeral=True
     )
 
+@bot.tree.command(name="tracker_clear", description="Eliminar todos los usuarios que estás rastreando")
+async def tracker_clear(interaction: discord.Interaction):
+    user_id = str(interaction.user.id)
+    guild_id = str(interaction.guild.id)
+
+    if user_id not in tracker_db or guild_id not in tracker_db.get(user_id, {}):
+        await interaction.response.send_message(
+            "ℹ️ No tienes datos de rastreo para este servidor.",
+            ephemeral=True
+        )
+        return
+
+    del tracker_db[user_id][guild_id]
+
+    if not tracker_db[user_id]:
+        del tracker_db[user_id]
+
+    save_data(tracker_db)
+
+    await interaction.response.send_message(
+        "🧹 Has eliminado todos los usuarios que estabas rastreando en este servidor.",
+        ephemeral=True
+    )
+
 # endregion
 
 bot.run('TU_TOKEN')
