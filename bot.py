@@ -1,7 +1,11 @@
 import discord
+from discord import app_commands
 from discord.ext import commands
 import json
 import os
+import time
+last_notification = {}  # {(notifier_id, tracked_user_id, guild_id): timestamp}
+COOLDOWN_SECONDS = 60
 
 # ==========================================
 # region CONFIG
