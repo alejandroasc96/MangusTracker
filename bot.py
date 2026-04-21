@@ -87,6 +87,45 @@ async def untracker(interaction: discord.Interaction, usuario: discord.Member):
             ephemeral=True
         )
 
+@bot.tree.command(name="tracker_list", description="Ver a quién estás rastreando")
+async def tracker_list(interaction: discord.Interaction):
+
+    user_id = str(interaction.user.id)
+    guild_id = str(interaction.guild.id)
+
+    if user_id not in tracker_db or guild_id not in tracker_db[user_id]:
+        await interaction.response.send_message(
+            "ℹ️ No estás rastreando a nadie en este servidor.",
+            ephemeral=True
+        )
+        return
+
+    tracked_ids = tracker_db[user_id][guild_id]
+
+    if not tracked_ids:
+        await interaction.response.send_message(
+            "ℹ️ No estás rastreando a nadie.",
+            ephemeral=True
+        )
+        return
+
+    nombres = []
+
+    for user_id_tracked in tracked_ids:
+        member = interaction.guild.get_member(int(user_id_tracked))
+
+        if member:
+            nombres.append(f"• {member.name}")
+        else:
+            nombres.append(f"• Usuario desconocido ({user_id_tracked})")
+
+    lista = "\n".join(nombres)
+
+    await interaction.response.send_message(
+        f"📋 **Usuarios que estás rastreando:**\n{lista}",
+        ephemeral=True
+    )
+
 # endregion
 
 bot.run('TU_TOKEN')
