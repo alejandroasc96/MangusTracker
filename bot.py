@@ -1,9 +1,11 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
+import aiofiles
 import json
 import os
 import time
+
 last_notification = {}  # {(notifier_id, tracked_user_id, guild_id): timestamp}
 COOLDOWN_SECONDS = 60
 
@@ -12,18 +14,22 @@ COOLDOWN_SECONDS = 60
 # ==========================================
 DATA_FILE = 'tracking_data.json'
 
-def load_data():
+async def load_data():
     if os.path.exists(DATA_FILE):
         try:
-            with open(DATA_FILE, 'r') as f:
-                return json.load(f)
-        except:
+            async with aiofiles.open(DATA_FILE, mode='r') as f:
+                content = await f.read()
+
+                return json.loads(content)
+        except Exception as e:
+            print(f"Error al cargar: {e}")
+
             return {}
     return {}
 
-def save_data(data):
-    with open(DATA_FILE, 'w') as f:
-        json.dump(data, f, indent=4)
+async def save_data(data):
+    async with aiofiles.open(DATA_FILE, mode='w') as f:
+        await f.write(json.dumps(data, indent=4))
 
 # --- BOT SETUP ---
 intents = discord.Intents.default()
@@ -32,10 +38,12 @@ intents.voice_states = True     # Necesario para rastrear cambios en canales de 
 intents.guilds = True           # Necesario para interactuar con los servidores
 
 bot = commands.Bot(command_prefix='!', intents=intents)
-tracker_db = load_data()        # Carga la base de datos de usuarios rastreados al iniciar
+tracker_db = {}
 
 @bot.event
 async def on_ready():
+    global tracker_db
+    tracker_db = await load_data()
     await bot.tree.sync()
     print(f'✅ Bot iniciado como {bot.user.name}')
 
@@ -59,7 +67,7 @@ async def tracker(interaction: discord.Interaction, usuario: discord.Member):
 
     if target_id not in tracker_db[user_id][guild_id]:
         tracker_db[user_id][guild_id].append(target_id)
-        save_data(tracker_db)
+        await save_data(tracker_db)
 
         await interaction.response.send_message(
             f"✅ Ahora rastreas a **{usuario.name}** en **{interaction.guild.name}**.",
@@ -82,7 +90,7 @@ async def untracker(interaction: discord.Interaction, usuario: discord.Member):
 
     try:
         tracker_db[user_id][guild_id].remove(target_id)
-        save_data(tracker_db)
+        await save_data(tracker_db)
 
         await interaction.response.send_message(
             f"✅ Has dejado de rastrear a **{usuario.name}**.",
@@ -151,7 +159,7 @@ async def tracker_clear(interaction: discord.Interaction):
     if not tracker_db[user_id]:
         del tracker_db[user_id]
 
-    save_data(tracker_db)
+    await save_data(tracker_db)
 
     await interaction.response.send_message(
         "🧹 Has eliminado todos los usuarios que estabas rastreando en este servidor.",
@@ -204,33 +212,30 @@ async def on_voice_state_update(member, before, after):
         member_id = str(member.id)
         guild_id = str(member.guild.id)
 
-        canal_url = f"https://discord.com/channels/{member.guild.id}/{after.channel.id}"
-
         for notifier_id, servers in tracker_db.items():
             if guild_id in servers and member_id in servers[guild_id]:
-                try:
-                    user = await bot.fetch_user(int(notifier_id))
+                
+                user = bot.get_user(int(notifier_id))
+                if user is None:
+                    try:
+                        user = await bot.fetch_user(int(notifier_id))
+                    except:
+                        continue 
 
+                key = (notifier_id, member_id, guild_id)
+                now = time.time()
+                if key in last_notification and (now - last_notification[key] < COOLDOWN_SECONDS):
+                    continue
+
+                try:
+                    canal_url = f"https://discord.com/channels/{member.guild.id}/{after.channel.id}"
                     mensaje = (
                         f"🔔 **Aviso de conexión**\n"
-                        f"**{member.name}** se ha conectado a "
-                        f"[{after.channel.name}]({canal_url}) en **{member.guild.name}**"
+                        f"**{member.name}** entró a [{after.channel.name}]({canal_url}) en **{member.guild.name}**"
                     )
-
-                    key = (notifier_id, member_id, guild_id)
-                    now = time.time()
-
-                    if key in last_notification:
-                        if now - last_notification[key] < COOLDOWN_SECONDS:
-                            continue
-
-                    last_notification[key] = now
-
                     await user.send(mensaje)
-
+                    last_notification[key] = now
                 except discord.Forbidden:
-                    print(f"No se pudo enviar DM a {notifier_id}")
-                except Exception as e:
-                    print(f"Error: {e}")
+                    pass
 
 bot.run('TU_TOKEN')
