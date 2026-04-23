@@ -2,9 +2,13 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 import aiofiles
+from dotenv import load_dotenv
 import json
 import os
 import time
+
+load_dotenv()
+TOKEN = os.getenv('DISCORD_TOKEN')
 
 last_notification = {}  # {(notifier_id, tracked_user_id, guild_id): timestamp}
 COOLDOWN_SECONDS = 60
@@ -238,4 +242,4 @@ async def on_voice_state_update(member, before, after):
                 except discord.Forbidden:
                     pass
 
-bot.run('TU_TOKEN')
+bot.run('TOKEN')
