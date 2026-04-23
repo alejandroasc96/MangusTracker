@@ -1,7 +1,7 @@
 # MangusTracker 🕵️‍♂️🥭
 
 <p align="center">
-  <img src="mangus_tracker.png" alt="MangusTracker Logo" width="350">
+  <img src="https://raw.githubusercontent.com/alejandroasc96/MangusTracker/main/img/magusTracker.png" alt="MangusTracker Logo" width="350">
 </p>
 
 > **MangusTracker** es tu espía personal y discreto en Discord. Este bot de rastreo te notifica al instante (vía Mensaje Directo) cuando tus usuarios seleccionados se conectan a un canal de voz, manteniéndote siempre al tanto sin que nadie más lo sepa.
