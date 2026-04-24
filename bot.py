@@ -186,7 +186,7 @@ async def help_command(interaction: discord.Interaction):
     )
 
     embed.add_field(
-        name="❌ /untracker_user @usuario",
+        name="❌ /untracker @usuario",
         value="Deja de rastrear a un usuario.",
         inline=False
     )
