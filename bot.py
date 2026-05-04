@@ -159,6 +159,8 @@ async def help_command(interaction: discord.Interaction):
     embed.add_field(name="❌ /untracker @usuario", value="Deja de rastrear a un usuario.", inline=False)
     embed.add_field(name="📋 /tracker_list", value="Muestra a quién estás rastreando.", inline=False)
     embed.add_field(name="🧹 /tracker_clear", value="Elimina todos los rastreos.", inline=False)
+    embed.add_field(name="🔕 /tracker_off", value="Pausa todas tus notificaciones en este servidor.", inline=False)
+    embed.add_field(name="🔔 /tracker_on", value="Reanuda tus notificaciones en este servidor.", inline=False)
     embed.set_footer(text="Las respuestas son privadas | Notificaciones por MD")
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
