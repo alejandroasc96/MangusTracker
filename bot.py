@@ -25,6 +25,7 @@ def init_db():
             notifier_id TEXT,
             guild_id TEXT,
             target_id TEXT,
+            enabled INTEGER DEFAULT 1,
             PRIMARY KEY (notifier_id, guild_id, target_id)
         )
     ''')
@@ -55,8 +56,11 @@ async def on_ready():
 async def tracker(interaction: discord.Interaction, usuario: discord.Member):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.execute("INSERT OR IGNORE INTO tracker VALUES (?, ?, ?)", 
-                    (str(interaction.user.id), str(interaction.guild.id), str(usuario.id)))
+    cursor.execute(
+            "INSERT OR IGNORE INTO tracker (notifier_id, guild_id, target_id, enabled) VALUES (?, ?, ?, ?)", 
+            (str(interaction.user.id), str(interaction.guild.id), str(usuario.id), 1)
+        )
+
     conn.commit()
     conn.close()
     await interaction.response.send_message(
@@ -124,6 +128,26 @@ async def tracker_clear(interaction: discord.Interaction):
         ephemeral=True
     )
 
+@bot.tree.command(name="tracker_off", description="Silenciar temporalmente las notificaciones de este servidor")
+async def tracker_off(interaction: discord.Interaction):
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE tracker SET enabled = 0 WHERE notifier_id = ? AND guild_id = ?", 
+                (str(interaction.user.id), str(interaction.guild.id)))
+    conn.commit()
+    conn.close()
+    await interaction.response.send_message("🔕 Notificaciones silenciadas para este servidor.", ephemeral=True)
+
+@bot.tree.command(name="tracker_on", description="Reactivar las notificaciones de este servidor")
+async def tracker_on(interaction: discord.Interaction):
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE tracker SET enabled = 1 WHERE notifier_id = ? AND guild_id = ?", 
+                (str(interaction.user.id), str(interaction.guild.id)))
+    conn.commit()
+    conn.close()
+    await interaction.response.send_message("🔔 Notificaciones reactivadas para este servidor.", ephemeral=True)
+
 @bot.tree.command(name="tracker_help", description="Ver todos los comandos disponibles")
 async def help_command(interaction: discord.Interaction):
     embed = discord.Embed(
@@ -146,7 +170,7 @@ async def on_voice_state_update(member, before, after):
     if before.channel is None and after.channel is not None:
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
-        cursor.execute("SELECT notifier_id FROM tracker WHERE guild_id = ? AND target_id = ?", 
+        cursor.execute("SELECT notifier_id FROM tracker WHERE guild_id = ? AND target_id = ? AND enabled = 1", 
                         (str(member.guild.id), str(member.id)))
         notifiers = cursor.fetchall()
         conn.close()
