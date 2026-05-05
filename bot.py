@@ -178,6 +178,12 @@ async def on_voice_state_update(member, before, after):
         conn.close()
 
         for (notifier_id,) in notifiers:
+            notifier_member = member.guild.get_member(int(notifier_id))
+            
+            if notifier_member:
+                if notifier_member.voice and notifier_member.voice.channel == after.channel:
+                    continue
+
             key = (notifier_id, str(member.id), str(member.guild.id))
             now = time.time()
             if key in last_notification and (now - last_notification[key] < COOLDOWN_SECONDS):
