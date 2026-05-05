@@ -68,10 +68,10 @@ async def tracker(interaction: discord.Interaction, usuario: discord.Member):
         ephemeral=True
     )
 
-# --- UNTRACKER (SLASH) ---
-@bot.tree.command(name="untracker", description="Dejar de rastrear a un usuario")
+# --- tracker_remove (SLASH) ---
+@bot.tree.command(name="tracker_remove", description="Dejar de rastrear a un usuario")
 @app_commands.describe(usuario="Usuario a dejar de rastrear")
-async def untracker(interaction: discord.Interaction, usuario: discord.Member):
+async def tracker_remove(interaction: discord.Interaction, usuario: discord.Member):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     cursor.execute("DELETE FROM tracker WHERE notifier_id = ? AND guild_id = ? AND target_id = ?", 
@@ -156,7 +156,7 @@ async def help_command(interaction: discord.Interaction):
         color=discord.Color.blue()
     )
     embed.add_field(name="🔎 /tracker @usuario", value="Empieza a rastrear a un usuario.", inline=False)
-    embed.add_field(name="❌ /untracker @usuario", value="Deja de rastrear a un usuario.", inline=False)
+    embed.add_field(name="❌ /tracker_remove @usuario", value="Deja de rastrear a un usuario.", inline=False)
     embed.add_field(name="📋 /tracker_list", value="Muestra a quién estás rastreando.", inline=False)
     embed.add_field(name="🧹 /tracker_clear", value="Elimina todos los rastreos.", inline=False)
     embed.add_field(name="🔕 /tracker_off", value="Pausa todas tus notificaciones en este servidor.", inline=False)
