@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MangusTracker | El ojo que todo lo ve</title>
-    <!-- Tailwind CSS para diseño rápido y ligero -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -113,7 +112,7 @@
     </section>
 
     <!-- Comandos -->
-    <section id="commands" class="py-24 px-6">
+ <section id="commands" class="py-24 px-6">
         <div class="max-w-4xl mx-auto terminal-bg border border-white/5 rounded-3xl overflow-hidden shadow-2xl">
             <div class="bg-zinc-900/50 px-6 py-4 border-b border-white/5 flex items-center gap-2">
                 <div class="flex gap-1.5">
@@ -123,11 +122,43 @@
                 </div>
                 <span class="text-xs text-gray-600 font-mono ml-4 tracking-widest uppercase">Console v1.0</span>
             </div>
-            <div class="p-8 font-mono text-sm leading-relaxed">
-                <div class="space-y-6 text-gray-300">
-                    <p><span class="text-orange-500">➜</span> /tracker <span class="text-orange-400">@usuario</span> <span class="text-gray-600 float-right hidden md:inline">// Rastrea a alguien</span></p>
-                    <p><span class="text-orange-500">➜</span> /tracker_off <span class="text-gray-600 float-right hidden md:inline">// Pausa alertas</span></p>
-                    <p><span class="text-orange-500">➜</span> /tracker_list <span class="text-gray-600 float-right hidden md:inline">// Tus vigilados</span></p>
+            <div class="p-8 font-mono text-sm leading-relaxed overflow-x-auto">
+                <div class="space-y-6 text-gray-300 min-w-[400px]">
+                    <div class="flex items-center gap-4 group">
+                        <span class="text-orange-500 font-bold shrink-0">➜</span>
+                        <span class="text-white font-bold shrink-0">/tracker <span class="text-orange-400">@usuario</span></span>
+                        <span class="text-gray-600 ml-auto">// Añadir objetivo a tu lista privada</span>
+                    </div>
+                    <div class="flex items-center gap-4 group">
+                        <span class="text-orange-500 font-bold shrink-0">➜</span>
+                        <span class="text-white font-bold shrink-0">/tracker_off</span>
+                        <span class="text-gray-600 ml-auto">// Pausar notificaciones temporalmente</span>
+                    </div>
+                    <div class="flex items-center gap-4 group">
+                        <span class="text-orange-500 font-bold shrink-0">➜</span>
+                        <span class="text-white font-bold shrink-0">/tracker_on</span>
+                        <span class="text-gray-600 ml-auto">// Reanudar notificaciones pausadas</span>
+                    </div>
+                    <div class="flex items-center gap-4 group">
+                        <span class="text-orange-500 font-bold shrink-0">➜</span>
+                        <span class="text-white font-bold shrink-0">/tracker_list</span>
+                        <span class="text-gray-600 ml-auto">// Ver tu lista de usuarios vigilados</span>
+                    </div>
+                    <div class="flex items-center gap-4 group">
+                        <span class="text-orange-500 font-bold shrink-0">➜</span>
+                        <span class="text-white font-bold shrink-0">/tracker_remove <span class="text-orange-400">@usuario</span></span>
+                        <span class="text-gray-600 ml-auto">// Dejar de vigilar a un usuario</span>
+                    </div>
+                    <div class="flex items-center gap-4 group">
+                        <span class="text-orange-500 font-bold shrink-0">➜</span>
+                        <span class="text-white font-bold shrink-0">/tracker_clear</span>
+                        <span class="text-gray-600 ml-auto">// Borrar todos tus datos de rastreo</span>
+                    </div>
+                    <div class="flex items-center gap-4 group">
+                        <span class="text-orange-500 font-bold shrink-0">➜</span>
+                        <span class="text-white font-bold shrink-0">/help</span>
+                        <span class="text-gray-600 ml-auto">// Mostrar guía de uso rápido</span>
+                    </div>
                 </div>
             </div>
         </div>
