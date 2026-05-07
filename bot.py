@@ -187,7 +187,17 @@ async def help_command(interaction: discord.Interaction):
         description="Lista de comandos del bot",
         color=discord.Color.blue()
     )
-    embed.add_field(name="🔎 /tracker @usuario", value="Empieza a rastrear a un usuario.", inline=False)
+    embed.add_field(
+        name="🔎 /tracker @usuario", 
+        value="Empieza a rastrear a un usuario. (Horario por defecto: 16:00 - 22:00 Canarias)", 
+        inline=False
+    )
+    
+    embed.add_field(
+        name="⏰ /tracker_schedule @usuario [inicio] [fin]", 
+        value="Configura el rango horario (0-23) para un usuario específico.", 
+        inline=False
+    )
     embed.add_field(name="❌ /tracker_remove @usuario", value="Deja de rastrear a un usuario.", inline=False)
     embed.add_field(name="📋 /tracker_list", value="Muestra a quién estás rastreando.", inline=False)
     embed.add_field(name="🧹 /tracker_clear", value="Elimina todos los rastreos.", inline=False)
