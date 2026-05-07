@@ -23,7 +23,6 @@ DB_FILE = 'tracking_data.db'
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    # Tabla para la configuración global de cada notificador
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS user_configs (
             user_id TEXT PRIMARY KEY,
@@ -32,7 +31,7 @@ def init_db():
             timezone TEXT DEFAULT 'Atlantic/Canary'
         )
     ''')
-    # Tabla para los rastreos (quién sigue a quién)
+
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS tracker (
             notifier_id TEXT,
@@ -200,6 +199,7 @@ async def tracker_on(interaction: discord.Interaction):
     conn.close()
     await interaction.response.send_message("🔔 Notificaciones reactivadas.", ephemeral=True)
 
+
 @bot.tree.command(name="tracker_help", description="Ver todos los comandos disponibles")
 async def help_command(interaction: discord.Interaction):
     embed = discord.Embed(
@@ -207,14 +207,22 @@ async def help_command(interaction: discord.Interaction):
         description="Lista de comandos del bot",
         color=discord.Color.blue()
     )
-    embed.add_field(name="⚙️ /config_global [inicio] [fin]", value="Establece tu horario de avisos global (0-23).", inline=False)
-    embed.add_field(name="🔎 /tracker @usuario", value="Empieza a rastrear a un usuario.", inline=False)
-    embed.add_field(name="❌ /tracker_remove @usuario", value="Deja de rastrear a un usuario.", inline=False)
-    embed.add_field(name="📋 /tracker_list", value="Muestra tus ajustes y rastreos.", inline=False)
-    embed.add_field(name="🧹 /tracker_clear", value="Elimina todos los rastreos.", inline=False)
-    embed.add_field(name="🔕 /tracker_off", value="Pausa todas tus notificaciones en este servidor.", inline=False)
-    embed.add_field(name="🔔 /tracker_on", value="Reanuda tus notificaciones en este servidor.", inline=False)
-    embed.set_footer(text="Las respuestas son privadas | Notificaciones por MD")
+    embed.add_field(name="⚙️ /config_global [inicio] [fin]",
+                    value="Establece tu horario de avisos global (0-23).", inline=False)
+    embed.add_field(name="🔎 /tracker @usuario",
+                    value="Empieza a rastrear a un usuario.", inline=False)
+    embed.add_field(name="❌ /tracker_remove @usuario",
+                    value="Deja de rastrear a un usuario.", inline=False)
+    embed.add_field(name="📋 /tracker_list",
+                    value="Muestra tus ajustes y rastreos.", inline=False)
+    embed.add_field(name="🧹 /tracker_clear",
+                    value="Elimina todos los rastreos.", inline=False)
+    embed.add_field(name="🔕 /tracker_off",
+                    value="Pausa todas tus notificaciones en este servidor.", inline=False)
+    embed.add_field(name="🔔 /tracker_on",
+                    value="Reanuda tus notificaciones en este servidor.", inline=False)
+    embed.set_footer(
+        text="Las respuestas son privadas | Notificaciones por MD")
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 # endregion
