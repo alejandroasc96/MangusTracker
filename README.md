@@ -26,11 +26,14 @@ Utiliza estos comandos de barra directamente en cualquier canal de texto del ser
 
 | Comando | Descripción | Ejemplo |
 | :--- | :--- | :--- |
-| `/tracker @usuario` | **Empieza a rastrear** a un miembro del servidor. | `/tracker @NombreUsuario` |
-| `/untracker @usuario` | **Deja de rastrear** a un usuario específico. | `/untracker @NombreUsuario` |
-| `/tracker_list` | Muestra tu **lista de rastreos** actual. | `/tracker_list` |
-| `/tracker_clear` | **Elimina todos** tus datos de rastreo. | `/tracker_clear` |
-| `/tracker_help` | Muestra este **menú de ayuda**. | `/tracker_help` |
+| `/config_global` | **Configura tu horario** (0-23h) para recibir avisos. | `/config_global inicio:9 fin:21` |
+| `/tracker @usuario` | **Empieza a rastrear** a un miembro del servidor. | `/tracker usuario:@Nombre` |
+| `/tracker_remove @usuario` | **Deja de rastrear** a un usuario específico. | `/tracker_remove usuario:@Nombre` |
+| `/tracker_list` | Muestra tu **horario y lista** de rastreos actual. | `/tracker_list` |
+| `/tracker_off` | **Pausa** las notificaciones en este servidor. | `/tracker_off` |
+| `/tracker_on` | **Reactiva** las notificaciones en este servidor. | `/tracker_on` |
+| `/tracker_clear` | **Elimina todos** tus rastreos en el servidor. | `/tracker_clear` |
+| `/tracker_help` | Muestra el **menú de ayuda** detallado. | `/tracker_help` |
 
 > *Nota: Todas las respuestas a estos comandos son efímeras (solo tú puedes verlas).*
 
