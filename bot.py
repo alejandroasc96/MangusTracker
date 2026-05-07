@@ -165,7 +165,7 @@ async def tracker_list(interaction: discord.Interaction):
         nombres.append(f"• **{name}**")
 
     await interaction.response.send_message(
-        f"📋 **Configuración Global:** {start}:00 - {end}:00\n"
+        f"📋 **Configuración Global:** {start}:00 - {end}:00 (Canarias) \n"
         f"**Usuarios rastreados:**\n" + "\n".join(nombres),
         ephemeral=True
     )
