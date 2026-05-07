@@ -23,20 +23,35 @@ DB_FILE = 'tracking_data.db'
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
+    # Tabla para la configuración global de cada notificador
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_configs (
+            user_id TEXT PRIMARY KEY,
+            start_hour INTEGER,
+            end_hour INTEGER,
+            timezone TEXT DEFAULT 'Atlantic/Canary'
+        )
+    ''')
+    # Tabla para los rastreos (quién sigue a quién)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS tracker (
             notifier_id TEXT,
             guild_id TEXT,
             target_id TEXT,
             enabled INTEGER DEFAULT 1,
-            start_hour INTEGER DEFAULT 16,
-            end_hour INTEGER DEFAULT 22,
-            timezone TEXT DEFAULT 'Atlantic/Canary',
             PRIMARY KEY (notifier_id, guild_id, target_id)
         )
     ''')
     conn.commit()
     conn.close()
+
+def get_user_config(user_id):
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT start_hour, end_hour, timezone FROM user_configs WHERE user_id = ?", (str(user_id),))
+    res = cursor.fetchone()
+    conn.close()
+    return res
 
 # --- BOT SETUP ---
 intents = discord.Intents.default()
@@ -57,20 +72,52 @@ async def on_ready():
 # ==========================================
 # region COMANDOS DE RASTREO
 # ==========================================
+@bot.tree.command(name="config_global", description="Configura tu horario de notificaciones general")
+@app_commands.describe(inicio="Hora inicio (0-23)", fin="Hora fin (0-23)")
+async def config_global(interaction: discord.Interaction, inicio: int, fin: int):
+    if not (0 <= inicio <= 23 and 0 <= fin <= 23):
+        await interaction.response.send_message("❌ Las horas deben estar entre 0 y 23.", ephemeral=True)
+        return
+
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO user_configs (user_id, start_hour, end_hour, timezone) 
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET start_hour=excluded.start_hour, end_hour=excluded.end_hour
+    ''', (str(interaction.user.id), inicio, fin, DEFAULT_TZ))
+    conn.commit()
+    conn.close()
+
+    await interaction.response.send_message(
+        f"✅ Configuración global guardada: {inicio}:00 a {fin}:00 (Canarias).",
+        ephemeral=True
+    )
+
 @bot.tree.command(name="tracker", description="Empieza a rastrear a un usuario")
 @app_commands.describe(usuario="Usuario a rastrear")
 async def tracker(interaction: discord.Interaction, usuario: discord.Member):
+    config = get_user_config(interaction.user.id)
+    
+    if not config:
+        await interaction.response.send_message(
+            "⚠️ No tienes un horario configurado. Usa `/config_global` antes de añadir rastreos.",
+            ephemeral=True
+        )
+        return
+
+    start, end, _ = config
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT OR IGNORE INTO tracker (notifier_id, guild_id, target_id, enabled, start_hour, end_hour, timezone) VALUES (?, ?, ?, ?, ?, ?, ?)", 
-        (str(interaction.user.id), str(interaction.guild.id), str(usuario.id), 1, 16, 22, DEFAULT_TZ)
+        "INSERT OR IGNORE INTO tracker (notifier_id, guild_id, target_id, enabled) VALUES (?, ?, ?, ?)", 
+        (str(interaction.user.id), str(interaction.guild.id), str(usuario.id), 1)
     )
-
     conn.commit()
     conn.close()
+
     await interaction.response.send_message(
-        f"✅ Ahora rastreas a **{usuario.name}**. Horario por defecto: 16:00 a 22:00 (Canarias).",
+        f"✅ Ahora rastreas a **{usuario.name}**. Se usará tu horario global: {start}:00 a {end}:00.",
         ephemeral=True
     )
 
@@ -87,62 +134,38 @@ async def tracker_remove(interaction: discord.Interaction, usuario: discord.Memb
     conn.close()
 
     if count > 0:
-        await interaction.response.send_message(
-            f"✅ Has dejado de rastrear a **{usuario.name}**.",
-            ephemeral=True
-        )
+        await interaction.response.send_message(f"✅ Has dejado de rastrear a **{usuario.name}**.", ephemeral=True)
     else:
-        await interaction.response.send_message(
-            "❌ No estabas rastreando a este usuario.",
-            ephemeral=True
-        )
-
-@bot.tree.command(name="tracker_schedule", description="Configura el horario de notificaciones para un usuario")
-@app_commands.describe(usuario="Usuario al que ajustar el horario", inicio="Hora inicio (0-23)", fin="Hora fin (0-23)")
-async def tracker_schedule(interaction: discord.Interaction, usuario: discord.Member, inicio: int, fin: int):
-    if not (0 <= inicio <= 23 and 0 <= fin <= 23):
-        await interaction.response.send_message("❌ Las horas deben estar entre 0 y 23.", ephemeral=True)
-        return
-
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute(
-        "UPDATE tracker SET start_hour = ?, end_hour = ? WHERE notifier_id = ? AND guild_id = ? AND target_id = ?",
-        (inicio, fin, str(interaction.user.id), str(interaction.guild.id), str(usuario.id))
-    )
-    conn.commit()
-    count = cursor.rowcount
-    conn.close()
-
-    if count > 0:
-        await interaction.response.send_message(
-            f"⏰ Horario actualizado para **{usuario.name}**: de {inicio}:00 a {fin}:00.",
-            ephemeral=True
-        )
-    else:
-        await interaction.response.send_message("❌ No estás rastreando a ese usuario. Usa `/tracker` primero.", ephemeral=True)
+        await interaction.response.send_message("❌ No estabas rastreando a este usuario.", ephemeral=True)
 
 @bot.tree.command(name="tracker_list", description="Ver a quién estás rastreando")
 async def tracker_list(interaction: discord.Interaction):
+    config = get_user_config(interaction.user.id)
+    if not config:
+        await interaction.response.send_message("❌ No tienes configuración global establecida.", ephemeral=True)
+        return
+
+    start, end, _ = config
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.execute("SELECT target_id, start_hour, end_hour FROM tracker WHERE notifier_id = ? AND guild_id = ?", 
+    cursor.execute("SELECT target_id FROM tracker WHERE notifier_id = ? AND guild_id = ?", 
                     (str(interaction.user.id), str(interaction.guild.id)))
     rows = cursor.fetchall()
     conn.close()
 
     if not rows:
-        await interaction.response.send_message("ℹ️ No estás rastreando a nadie en este servidor.", ephemeral=True)
+        await interaction.response.send_message(f"ℹ️ No rastreas a nadie. Horario: {start}:00-{end}:00.", ephemeral=True)
         return
 
     nombres = []
-    for target_id, start, end in rows:
+    for (target_id,) in rows:
         member = interaction.guild.get_member(int(target_id))
         name = member.name if member else f"Desconocido ({target_id})"
-        nombres.append(f"• **{name}** [{start}:00 - {end}:00]")
+        nombres.append(f"• **{name}**")
 
     await interaction.response.send_message(
-        f"📋 **Usuarios que estás rastreando:**\n" + "\n".join(nombres),
+        f"📋 **Configuración Global:** {start}:00 - {end}:00\n"
+        f"**Usuarios rastreados:**\n" + "\n".join(nombres),
         ephemeral=True
     )
 
@@ -155,10 +178,7 @@ async def tracker_clear(interaction: discord.Interaction):
     conn.commit()
     conn.close()
 
-    await interaction.response.send_message(
-        "🧹 Has eliminado todos los usuarios que estabas rastreando en este servidor.",
-        ephemeral=True
-    )
+    await interaction.response.send_message("🧹 Has eliminado todos tus rastreos en este servidor.", ephemeral=True)
 
 @bot.tree.command(name="tracker_off", description="Silenciar temporalmente las notificaciones de este servidor")
 async def tracker_off(interaction: discord.Interaction):
@@ -168,7 +188,7 @@ async def tracker_off(interaction: discord.Interaction):
                 (str(interaction.user.id), str(interaction.guild.id)))
     conn.commit()
     conn.close()
-    await interaction.response.send_message("🔕 Notificaciones silenciadas para este servidor.", ephemeral=True)
+    await interaction.response.send_message("🔕 Notificaciones silenciadas.", ephemeral=True)
 
 @bot.tree.command(name="tracker_on", description="Reactivar las notificaciones de este servidor")
 async def tracker_on(interaction: discord.Interaction):
@@ -178,7 +198,7 @@ async def tracker_on(interaction: discord.Interaction):
                 (str(interaction.user.id), str(interaction.guild.id)))
     conn.commit()
     conn.close()
-    await interaction.response.send_message("🔔 Notificaciones reactivadas para este servidor.", ephemeral=True)
+    await interaction.response.send_message("🔔 Notificaciones reactivadas.", ephemeral=True)
 
 @bot.tree.command(name="tracker_help", description="Ver todos los comandos disponibles")
 async def help_command(interaction: discord.Interaction):
@@ -187,22 +207,13 @@ async def help_command(interaction: discord.Interaction):
         description="Lista de comandos del bot",
         color=discord.Color.blue()
     )
-    embed.add_field(
-        name="🔎 /tracker @usuario", 
-        value="Empieza a rastrear a un usuario. (Horario por defecto: 16:00 - 22:00 Canarias)", 
-        inline=False
-    )
-    
-    embed.add_field(
-        name="⏰ /tracker_schedule @usuario [inicio] [fin]", 
-        value="Configura el rango horario (0-23) para un usuario específico.", 
-        inline=False
-    )
+    embed.add_field(name="⚙️ /config_global [inicio] [fin]", value="Establece tu horario de avisos global (0-23).", inline=False)
+    embed.add_field(name="🔎 /tracker @usuario", value="Empieza a rastrear a un usuario.", inline=False)
     embed.add_field(name="❌ /tracker_remove @usuario", value="Deja de rastrear a un usuario.", inline=False)
-    embed.add_field(name="📋 /tracker_list", value="Muestra a quién estás rastreando.", inline=False)
+    embed.add_field(name="📋 /tracker_list", value="Muestra tus ajustes y rastreos.", inline=False)
     embed.add_field(name="🧹 /tracker_clear", value="Elimina todos los rastreos.", inline=False)
-    embed.add_field(name="🔕 /tracker_off", value="Pausa todas tus notificaciones en este servidor.", inline=False)
-    embed.add_field(name="🔔 /tracker_on", value="Reanuda tus notificaciones en este servidor.", inline=False)
+    embed.add_field(name="🔕 /tracker_off", value="Pausa notificaciones.", inline=False)
+    embed.add_field(name="🔔 /tracker_on", value="Reanuda notificaciones.", inline=False)
     embed.set_footer(text="Las respuestas son privadas | Notificaciones por MD")
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -228,8 +239,13 @@ async def on_voice_state_update(member, before, after):
     if before.channel is None and after.channel is not None:
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
-        cursor.execute("SELECT notifier_id, start_hour, end_hour, timezone FROM tracker WHERE guild_id = ? AND target_id = ? AND enabled = 1", 
-                        (str(member.guild.id), str(member.id)))
+        # Join para obtener las horas globales del notificador que sigue al usuario
+        cursor.execute('''
+            SELECT t.notifier_id, c.start_hour, c.end_hour, c.timezone 
+            FROM tracker t
+            JOIN user_configs c ON t.notifier_id = c.user_id
+            WHERE t.guild_id = ? AND t.target_id = ? AND t.enabled = 1
+        ''', (str(member.guild.id), str(member.id)))
         notifiers = cursor.fetchall()
         conn.close()
 
