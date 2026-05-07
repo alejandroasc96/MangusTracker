@@ -5,12 +5,15 @@ import sqlite3
 from dotenv import load_dotenv
 import os
 import time
+from datetime import datetime
+import pytz
 
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 
 last_notification = {}  # {(notifier_id, tracked_user_id, guild_id): timestamp}
 COOLDOWN_SECONDS = 60
+DEFAULT_TZ = 'Atlantic/Canary'
 
 # ==========================================
 # region CONFIG
@@ -26,6 +29,9 @@ def init_db():
             guild_id TEXT,
             target_id TEXT,
             enabled INTEGER DEFAULT 1,
+            start_hour INTEGER DEFAULT 16,
+            end_hour INTEGER DEFAULT 22,
+            timezone TEXT DEFAULT 'Atlantic/Canary',
             PRIMARY KEY (notifier_id, guild_id, target_id)
         )
     ''')
@@ -57,14 +63,14 @@ async def tracker(interaction: discord.Interaction, usuario: discord.Member):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     cursor.execute(
-            "INSERT OR IGNORE INTO tracker (notifier_id, guild_id, target_id, enabled) VALUES (?, ?, ?, ?)", 
-            (str(interaction.user.id), str(interaction.guild.id), str(usuario.id), 1)
-        )
+        "INSERT OR IGNORE INTO tracker (notifier_id, guild_id, target_id, enabled, start_hour, end_hour, timezone) VALUES (?, ?, ?, ?, ?, ?, ?)", 
+        (str(interaction.user.id), str(interaction.guild.id), str(usuario.id), 1, 16, 22, DEFAULT_TZ)
+    )
 
     conn.commit()
     conn.close()
     await interaction.response.send_message(
-        f"✅ Ahora rastreas a **{usuario.name}** en **{interaction.guild.name}**.",
+        f"✅ Ahora rastreas a **{usuario.name}**. Horario por defecto: 16:00 a 22:00 (Canarias).",
         ephemeral=True
     )
 
@@ -91,11 +97,36 @@ async def tracker_remove(interaction: discord.Interaction, usuario: discord.Memb
             ephemeral=True
         )
 
+@bot.tree.command(name="tracker_schedule", description="Configura el horario de notificaciones para un usuario")
+@app_commands.describe(usuario="Usuario al que ajustar el horario", inicio="Hora inicio (0-23)", fin="Hora fin (0-23)")
+async def tracker_schedule(interaction: discord.Interaction, usuario: discord.Member, inicio: int, fin: int):
+    if not (0 <= inicio <= 23 and 0 <= fin <= 23):
+        await interaction.response.send_message("❌ Las horas deben estar entre 0 y 23.", ephemeral=True)
+        return
+
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE tracker SET start_hour = ?, end_hour = ? WHERE notifier_id = ? AND guild_id = ? AND target_id = ?",
+        (inicio, fin, str(interaction.user.id), str(interaction.guild.id), str(usuario.id))
+    )
+    conn.commit()
+    count = cursor.rowcount
+    conn.close()
+
+    if count > 0:
+        await interaction.response.send_message(
+            f"⏰ Horario actualizado para **{usuario.name}**: de {inicio}:00 a {fin}:00.",
+            ephemeral=True
+        )
+    else:
+        await interaction.response.send_message("❌ No estás rastreando a ese usuario. Usa `/tracker` primero.", ephemeral=True)
+
 @bot.tree.command(name="tracker_list", description="Ver a quién estás rastreando")
 async def tracker_list(interaction: discord.Interaction):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.execute("SELECT target_id FROM tracker WHERE notifier_id = ? AND guild_id = ?", 
+    cursor.execute("SELECT target_id, start_hour, end_hour FROM tracker WHERE notifier_id = ? AND guild_id = ?", 
                     (str(interaction.user.id), str(interaction.guild.id)))
     rows = cursor.fetchall()
     conn.close()
@@ -105,9 +136,10 @@ async def tracker_list(interaction: discord.Interaction):
         return
 
     nombres = []
-    for (target_id,) in rows:
+    for target_id, start, end in rows:
         member = interaction.guild.get_member(int(target_id))
-        nombres.append(f"• {member.name if member else 'Usuario desconocido (' + target_id + ')'}")
+        name = member.name if member else f"Desconocido ({target_id})"
+        nombres.append(f"• **{name}** [{start}:00 - {end}:00]")
 
     await interaction.response.send_message(
         f"📋 **Usuarios que estás rastreando:**\n" + "\n".join(nombres),
@@ -155,7 +187,17 @@ async def help_command(interaction: discord.Interaction):
         description="Lista de comandos del bot",
         color=discord.Color.blue()
     )
-    embed.add_field(name="🔎 /tracker @usuario", value="Empieza a rastrear a un usuario.", inline=False)
+    embed.add_field(
+        name="🔎 /tracker @usuario", 
+        value="Empieza a rastrear a un usuario. (Horario por defecto: 16:00 - 22:00 Canarias)", 
+        inline=False
+    )
+    
+    embed.add_field(
+        name="⏰ /tracker_schedule @usuario [inicio] [fin]", 
+        value="Configura el rango horario (0-23) para un usuario específico.", 
+        inline=False
+    )
     embed.add_field(name="❌ /tracker_remove @usuario", value="Deja de rastrear a un usuario.", inline=False)
     embed.add_field(name="📋 /tracker_list", value="Muestra a quién estás rastreando.", inline=False)
     embed.add_field(name="🧹 /tracker_clear", value="Elimina todos los rastreos.", inline=False)
@@ -166,18 +208,35 @@ async def help_command(interaction: discord.Interaction):
 
 # endregion
 
+# --- LÓGICA DE TIEMPO ---
+def is_in_schedule(start, end, tz_name):
+    try:
+        tz = pytz.timezone(tz_name)
+        now = datetime.now(tz)
+        current_hour = now.hour
+
+        if start <= end:
+            return start <= current_hour < end
+        else:
+            return current_hour >= start or current_hour < end
+    except:
+        return True
+    
 # --- NOTIFICACIÓN POR MD ---
 @bot.event
 async def on_voice_state_update(member, before, after):
     if before.channel is None and after.channel is not None:
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
-        cursor.execute("SELECT notifier_id FROM tracker WHERE guild_id = ? AND target_id = ? AND enabled = 1", 
+        cursor.execute("SELECT notifier_id, start_hour, end_hour, timezone FROM tracker WHERE guild_id = ? AND target_id = ? AND enabled = 1", 
                         (str(member.guild.id), str(member.id)))
         notifiers = cursor.fetchall()
         conn.close()
 
-        for (notifier_id,) in notifiers:
+        for notifier_id, start, end, tz_name in notifiers:
+            if not is_in_schedule(start, end, tz_name):
+                continue
+
             key = (notifier_id, str(member.id), str(member.guild.id))
             now = time.time()
             if key in last_notification and (now - last_notification[key] < COOLDOWN_SECONDS):
