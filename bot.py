@@ -89,7 +89,9 @@ async def config_global(interaction: discord.Interaction, inicio: int, fin: int)
     conn.close()
 
     await interaction.response.send_message(
-        f"✅ Configuración global guardada: {inicio}:00 a {fin}:00 (Canarias).",
+        f"✅ **Configuración Global Aplicada**\n"
+        f"⏰ Horario: `{inicio}:00` a `{fin}:00` (Canarias).\n\n"
+        f"ℹ️ *Este horario se usará para tus rastreos en **todos** los servidores donde esté el bot.*",
         ephemeral=True
     )
 
