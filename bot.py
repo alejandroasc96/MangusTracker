@@ -15,42 +15,60 @@ last_notification = {}  # {(notifier_id, tracked_user_id, guild_id): timestamp}
 COOLDOWN_SECONDS = 60
 DEFAULT_TZ = 'Atlantic/Canary'
 
-# ==========================================
+# ==============
 # region CONFIG
-# ==========================================
+# ==============
 DB_FILE = 'tracking_data.db'
 
-def init_db():
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS user_configs (
-            user_id TEXT PRIMARY KEY,
-            start_hour INTEGER,
-            end_hour INTEGER,
-            timezone TEXT DEFAULT 'Atlantic/Canary'
-        )
-    ''')
+class DatabaseManager:
+    """Gestiona la conexión persistente y optimizaciones de SQLite"""
+    def __init__(self, db_path):
+        self.conn = sqlite3.connect(db_path)
+        self._setup_db()
 
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS tracker (
-            notifier_id TEXT,
-            guild_id TEXT,
-            target_id TEXT,
-            enabled INTEGER DEFAULT 1,
-            PRIMARY KEY (notifier_id, guild_id, target_id)
-        )
-    ''')
-    conn.commit()
-    conn.close()
+    def _setup_db(self):
+        # Optimizaciones para Raspberry Pi / NanoPi (Protección de SD)
+        self.conn.execute("PRAGMA journal_mode=WAL;")
+        self.conn.execute("PRAGMA synchronous=NORMAL;")
+        
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS user_configs (
+                user_id TEXT PRIMARY KEY,
+                start_hour INTEGER,
+                end_hour INTEGER,
+                timezone TEXT DEFAULT 'Atlantic/Canary'
+            )
+        ''')
 
-def get_user_config(user_id):
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute("SELECT start_hour, end_hour, timezone FROM user_configs WHERE user_id = ?", (str(user_id),))
-    res = cursor.fetchone()
-    conn.close()
-    return res
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS tracker (
+                notifier_id TEXT,
+                guild_id TEXT,
+                target_id TEXT,
+                enabled INTEGER DEFAULT 1,
+                PRIMARY KEY (notifier_id, guild_id, target_id)
+            )
+        ''')
+        self.conn.commit()
+
+    def execute(self, query, params=()):
+        """Ejecuta una operación de escritura (INSERT, UPDATE, DELETE)"""
+        cursor = self.conn.cursor()
+        cursor.execute(query, params)
+        self.conn.commit()
+        return cursor
+
+    def fetch(self, query, params=()):
+        """Ejecuta una operación de lectura (SELECT)"""
+        cursor = self.conn.cursor()
+        cursor.execute(query, params)
+        return cursor.fetchall()
+
+# Inicializamos el gestor de base de datos una sola vez
+db = DatabaseManager(DB_FILE)
+
+# endregion
 
 # --- BOT SETUP ---
 intents = discord.Intents.default()
@@ -62,11 +80,9 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 
 @bot.event
 async def on_ready():
-    init_db()
+    # Sincronizamos los comandos del bot
     await bot.tree.sync()
     print(f'✅ Bot iniciado como {bot.user.name}')
-
-# endregion
 
 # ==========================================
 # region COMANDOS DE RASTREO
@@ -78,15 +94,11 @@ async def config_global(interaction: discord.Interaction, inicio: int, fin: int)
         await interaction.response.send_message("❌ Las horas deben estar entre 0 y 23.", ephemeral=True)
         return
 
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute('''
+    db.execute('''
         INSERT INTO user_configs (user_id, start_hour, end_hour, timezone) 
         VALUES (?, ?, ?, ?)
         ON CONFLICT(user_id) DO UPDATE SET start_hour=excluded.start_hour, end_hour=excluded.end_hour
     ''', (str(interaction.user.id), inicio, fin, DEFAULT_TZ))
-    conn.commit()
-    conn.close()
 
     await interaction.response.send_message(
         f"✅ **Configuración Global Aplicada**\n"
@@ -98,24 +110,21 @@ async def config_global(interaction: discord.Interaction, inicio: int, fin: int)
 @bot.tree.command(name="tracker", description="Empieza a rastrear a un usuario")
 @app_commands.describe(usuario="Usuario a rastrear")
 async def tracker(interaction: discord.Interaction, usuario: discord.Member):
-    config = get_user_config(interaction.user.id)
+    # Obtenemos la configuración del usuario
+    res = db.fetch("SELECT start_hour, end_hour, timezone FROM user_configs WHERE user_id = ?", (str(interaction.user.id),))
     
-    if not config:
+    if not res:
         await interaction.response.send_message(
             "⚠️ No tienes un horario configurado. Usa `/config_global` antes de añadir rastreos.",
             ephemeral=True
         )
         return
 
-    start, end, _ = config
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute(
+    start, end, _ = res[0]
+    db.execute(
         "INSERT OR IGNORE INTO tracker (notifier_id, guild_id, target_id, enabled) VALUES (?, ?, ?, ?)", 
         (str(interaction.user.id), str(interaction.guild.id), str(usuario.id), 1)
     )
-    conn.commit()
-    conn.close()
 
     await interaction.response.send_message(
         f"✅ Ahora rastreas a **{usuario.name}**. Se usará tu horario global: {start}:00 a {end}:00.",
@@ -126,13 +135,9 @@ async def tracker(interaction: discord.Interaction, usuario: discord.Member):
 @bot.tree.command(name="tracker_remove", description="Dejar de rastrear a un usuario")
 @app_commands.describe(usuario="Usuario a dejar de rastrear")
 async def tracker_remove(interaction: discord.Interaction, usuario: discord.Member):
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM tracker WHERE notifier_id = ? AND guild_id = ? AND target_id = ?", 
-                    (str(interaction.user.id), str(interaction.guild.id), str(usuario.id)))
-    conn.commit()
+    cursor = db.execute("DELETE FROM tracker WHERE notifier_id = ? AND guild_id = ? AND target_id = ?", 
+                        (str(interaction.user.id), str(interaction.guild.id), str(usuario.id)))
     count = cursor.rowcount
-    conn.close()
 
     if count > 0:
         await interaction.response.send_message(f"✅ Has dejado de rastrear a **{usuario.name}**.", ephemeral=True)
@@ -141,18 +146,14 @@ async def tracker_remove(interaction: discord.Interaction, usuario: discord.Memb
 
 @bot.tree.command(name="tracker_list", description="Ver a quién estás rastreando")
 async def tracker_list(interaction: discord.Interaction):
-    config = get_user_config(interaction.user.id)
+    config = db.fetch("SELECT start_hour, end_hour, timezone FROM user_configs WHERE user_id = ?", (str(interaction.user.id),))
     if not config:
         await interaction.response.send_message("❌ No tienes configuración global establecida.", ephemeral=True)
         return
 
-    start, end, _ = config
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute("SELECT target_id FROM tracker WHERE notifier_id = ? AND guild_id = ?", 
+    start, end, _ = config[0]
+    rows = db.fetch("SELECT target_id FROM tracker WHERE notifier_id = ? AND guild_id = ?", 
                     (str(interaction.user.id), str(interaction.guild.id)))
-    rows = cursor.fetchall()
-    conn.close()
 
     if not rows:
         await interaction.response.send_message(f"ℹ️ No rastreas a nadie. Horario: {start}:00-{end}:00.", ephemeral=True)
@@ -172,33 +173,21 @@ async def tracker_list(interaction: discord.Interaction):
 
 @bot.tree.command(name="tracker_clear", description="Eliminar todos los usuarios que estás rastreando")
 async def tracker_clear(interaction: discord.Interaction):
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM tracker WHERE notifier_id = ? AND guild_id = ?", 
-                    (str(interaction.user.id), str(interaction.guild.id)))
-    conn.commit()
-    conn.close()
+    db.execute("DELETE FROM tracker WHERE notifier_id = ? AND guild_id = ?", 
+               (str(interaction.user.id), str(interaction.guild.id)))
 
     await interaction.response.send_message("🧹 Has eliminado todos tus rastreos en este servidor.", ephemeral=True)
 
 @bot.tree.command(name="tracker_off", description="Silenciar temporalmente las notificaciones de este servidor")
 async def tracker_off(interaction: discord.Interaction):
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute("UPDATE tracker SET enabled = 0 WHERE notifier_id = ? AND guild_id = ?", 
-                (str(interaction.user.id), str(interaction.guild.id)))
-    conn.commit()
-    conn.close()
+    db.execute("UPDATE tracker SET enabled = 0 WHERE notifier_id = ? AND guild_id = ?", 
+               (str(interaction.user.id), str(interaction.guild.id)))
     await interaction.response.send_message("🔕 Notificaciones silenciadas.", ephemeral=True)
 
 @bot.tree.command(name="tracker_on", description="Reactivar las notificaciones de este servidor")
 async def tracker_on(interaction: discord.Interaction):
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute("UPDATE tracker SET enabled = 1 WHERE notifier_id = ? AND guild_id = ?", 
-                (str(interaction.user.id), str(interaction.guild.id)))
-    conn.commit()
-    conn.close()
+    db.execute("UPDATE tracker SET enabled = 1 WHERE notifier_id = ? AND guild_id = ?", 
+               (str(interaction.user.id), str(interaction.guild.id)))
     await interaction.response.send_message("🔔 Notificaciones reactivadas.", ephemeral=True)
 
 
@@ -247,17 +236,13 @@ def is_in_schedule(start, end, tz_name):
 @bot.event
 async def on_voice_state_update(member, before, after):
     if before.channel is None and after.channel is not None:
-        conn = sqlite3.connect(DB_FILE)
-        cursor = conn.cursor()
         # Join para obtener las horas globales del notificador que sigue al usuario
-        cursor.execute('''
+        notifiers = db.fetch('''
             SELECT t.notifier_id, c.start_hour, c.end_hour, c.timezone 
             FROM tracker t
             JOIN user_configs c ON t.notifier_id = c.user_id
             WHERE t.guild_id = ? AND t.target_id = ? AND t.enabled = 1
         ''', (str(member.guild.id), str(member.id)))
-        notifiers = cursor.fetchall()
-        conn.close()
 
         for notifier_id, start, end, tz_name in notifiers:
             if not is_in_schedule(start, end, tz_name):
