@@ -12,7 +12,7 @@
 
 El funcionamiento es sencillo pero potente, diseñado para la discreción y el control personal. Todo se gestiona mediante cómodos **Comandos de Barra (`/slash commands`)**, y las notificaciones te llegan en privado.
 
-### Flujo de Uso Princpial:
+### Flujo de Uso Principal:
 
 1.  **Rastreo Silencioso:** Tú decides a quién quieres rastrear usando el comando `/tracker`. El bot comienza a vigilar a ese usuario en el servidor actual.
 2.  **Notificaciones Privadas:** Cuando el usuario rastreado entra a *cualquier* canal de voz del servidor, MangusTracker te envía un Mensaje Directo (MD) inmediato. ¡El usuario rastreado nunca sabrá que está siendo vigilado!
@@ -42,9 +42,10 @@ Utiliza estos comandos de barra directamente en cualquier canal de texto del ser
 ## ⚙️ Características Técnicas
 
 * **100% Privado:** Las notificaciones y la gestión de la base de datos de rastreo son totalmente privadas y se entregan por MD.
-* **Comandos de Barra:** Integración total con la interfaz moderna de Discord.
-* **Optimizado:** Utiliza caché local y persistencia asíncrona (`aiofiles` + `json`) para un rendimiento ligero y eficiente.
-* **Seguro:** Diseñado para manejar tokens y datos de forma segura (con `.env` para el desarrollo local).
+* **Comandos de Barra:** Integración total con la interfaz moderna de Discord. Solo funcionan dentro de servidores (no en DMs directos al bot).
+* **Persistencia con SQLite:** Los rastreos y configuraciones se guardan en una base de datos SQLite local con modo WAL activado, optimizado para hardware embebido con tarjeta SD (Raspberry Pi / NanoPi).
+* **Logging estructurado:** El bot registra advertencias y errores (DMs bloqueados, errores HTTP, zonas horarias inválidas) para facilitar el diagnóstico en producción.
+* **Seguro:** Los tokens se gestionan mediante variables de entorno (`.env`). Nunca se escriben en el código.
 
 ---
 
