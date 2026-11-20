@@ -151,12 +151,22 @@ else
     success "Entorno virtual creado"
 fi
 
-"${VENV_DIR}/bin/pip" install --upgrade pip --quiet
+# Actualizar pip de forma silenciosa
+PIP_CMD=("${VENV_DIR}/bin/pip")
+if [[ -n "${SUDO_USER:-}" && "${SUDO_USER}" != "root" ]]; then
+    # Ejecutar pip como el usuario original para respetar permisos en su HOME y cache
+    PIP_EXEC=(sudo -u "${BOT_USER}" -H "${VENV_DIR}/bin/pip")
+else
+    PIP_EXEC=("${VENV_DIR}/bin/pip" "--no-cache-dir")
+fi
+
+"${PIP_EXEC[@]}" install --upgrade pip --quiet
 success "pip actualizado"
 
 info "Instalando dependencias desde requirements.txt..."
-"${VENV_DIR}/bin/pip" install -r "${REQUIREMENTS}" --quiet
+"${PIP_EXEC[@]}" install -r "${REQUIREMENTS}" --quiet
 success "Dependencias instaladas correctamente"
+chown -R "${BOT_USER}:${BOT_USER}" "${VENV_DIR}" 2>/dev/null || true
 
 # =============================================================================
 # 5. GENERACIÓN Y ACTIVACIÓN DEL SERVICIO SYSTEMD
